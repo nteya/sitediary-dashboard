@@ -130,6 +130,7 @@ function normalizeSettings(data: any): CompanySettings {
   const merged: any = {
     ...defaultSettings,
     ...(data || {}),
+    logoUrl: "",
   };
 
   let normalizedAreas: AreaItem[] = [];
@@ -166,6 +167,7 @@ function normalizeSettings(data: any): CompanySettings {
 
   return {
     ...merged,
+    logoUrl: "",
     areas: normalizedAreas.length ? normalizedAreas : defaultSettings.areas,
     wbs: Array.isArray(merged.wbs) ? merged.wbs : defaultSettings.wbs,
     materials: Array.isArray(merged.materials)
@@ -221,6 +223,7 @@ export default function CompanySettingsPage() {
         } else {
           await setDoc(settingsRef, {
             ...defaultSettings,
+            logoUrl: "",
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
             updatedBy: currentUser.uid,
@@ -250,12 +253,16 @@ export default function CompanySettingsPage() {
     setSaving(true);
 
     try {
-      const cleanedSettings = normalizeSettings(settings);
+      const cleanedSettings = normalizeSettings({
+        ...settings,
+        logoUrl: "",
+      });
 
       await setDoc(
         doc(db, "companies", companyId, "settings", "appConfig"),
         {
           ...cleanedSettings,
+          logoUrl: "",
           updatedAt: serverTimestamp(),
           updatedBy: user.uid,
         },
@@ -297,9 +304,7 @@ export default function CompanySettingsPage() {
 
     while (tries < 10) {
       const codeSnap = await getDoc(doc(db, "companyAccessCodes", code));
-
       if (!codeSnap.exists()) return code;
-
       code = generateSixDigitCode();
       tries++;
     }
@@ -353,6 +358,7 @@ export default function CompanySettingsPage() {
 
       const updatedSettings = {
         ...settings,
+        logoUrl: "",
         appAccessCode: newCode,
         appAccessCodeActive: true,
       };
@@ -397,11 +403,6 @@ export default function CompanySettingsPage() {
         { merge: true }
       );
 
-      const updatedSettings = {
-        ...settings,
-        appAccessCodeActive: newStatus,
-      };
-
       await setDoc(
         doc(db, "companies", companyId, "settings", "appConfig"),
         {
@@ -412,7 +413,10 @@ export default function CompanySettingsPage() {
         { merge: true }
       );
 
-      setSettings(updatedSettings);
+      setSettings((prev) => ({
+        ...prev,
+        appAccessCodeActive: newStatus,
+      }));
     } catch (error) {
       console.error("Error updating code status:", error);
       alert("Failed to update code status.");
@@ -590,46 +594,39 @@ export default function CompanySettingsPage() {
 
   if (loading) {
     return (
-      <div className="software-card-strong settings-card">
-        <p style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <Loader2 className="animate-spin" size={18} />
-          Loading company settings...
-        </p>
+      <div className="settings-pro-loading">
+        <Loader2 className="animate-spin" size={20} />
+        Loading company settings...
       </div>
     );
   }
 
   if (!user) {
     return (
-      <div className="software-card-strong settings-card">
-        <h2 className="software-title">Access denied</h2>
-        <p className="software-subtitle">
-          Please login before changing company settings.
-        </p>
+      <div className="settings-pro-denied">
+        <h2>Access denied</h2>
+        <p>Please login before changing company settings.</p>
       </div>
     );
   }
 
   return (
-    <div className="settings-page">
-      <section className="software-card-strong settings-hero">
-        <div className="settings-hero-left">
-          <div className="settings-icon-box">
-            <Settings size={28} />
-          </div>
-
-          <div>
-            <h1 className="software-title">Company Settings</h1>
-            <p className="software-subtitle">
-              Control what appears inside the SiteDiary mobile app.
-            </p>
-          </div>
+    <div className="settings-pro-page">
+      <section className="settings-pro-hero">
+        <div>
+          <p className="settings-pro-kicker">SiteDiary Configuration</p>
+          <h1>Company App Settings</h1>
+          <p>
+            Configure how the mobile app works for this company: company name,
+            project name, access code, work areas, WBS, materials, shifts, and
+            custom diary fields.
+          </p>
         </div>
 
         <button
           onClick={saveSettings}
           disabled={saving}
-          className="soft-button soft-button-primary"
+          className="settings-save-main"
         >
           {saving ? (
             <>
@@ -643,190 +640,163 @@ export default function CompanySettingsPage() {
         </button>
       </section>
 
-      <section className="software-card settings-card">
-        <div className="settings-card-header">
+      <section className="settings-access-card">
+        <div className="settings-card-top">
           <div>
-            <h2 className="settings-card-title">
-              <KeyRound size={21} /> App Access Code
+            <h2>
+              <KeyRound size={20} /> App Access Code
             </h2>
-            <p className="software-subtitle">
-              Supervisors will use the company name and this 6-digit code to
-              connect the mobile app to this company.
+            <p>
+              Supervisors connect the mobile app using the company name and this
+              6-digit code.
             </p>
           </div>
 
           <button
             onClick={generateAppAccessCode}
             disabled={saving}
-            className="soft-button soft-button-primary"
+            className="settings-primary-btn"
           >
-            <RefreshCcw size={17} />
+            <RefreshCcw size={16} />
             {settings.appAccessCode ? "Regenerate Code" : "Generate Code"}
           </button>
         </div>
 
-        <div className="settings-grid">
-          <div className="settings-wbs-card">
-            <p className="settings-label">Correct Company Name</p>
-            <h2 style={{ margin: 0, fontSize: 26, fontWeight: 900 }}>
-              {settings.companyName || "No company name set"}
-            </h2>
-            <p className="software-subtitle">
-              The app must use this company name together with the code.
-            </p>
+        <div className="settings-access-grid">
+          <div className="settings-access-box">
+            <span>Company Name</span>
+            <strong>{settings.companyName || "No company name set"}</strong>
+            <p>The mobile app must use this exact company name.</p>
           </div>
 
-          <div className="settings-wbs-card">
-            <p className="settings-label">Current App Code</p>
+          <div className="settings-access-box code">
+            <span>Current Code</span>
 
             {settings.appAccessCode ? (
               <>
-                <h2
-                  style={{
-                    margin: 0,
-                    fontSize: 34,
-                    fontWeight: 900,
-                    letterSpacing: "0.18em",
-                  }}
-                >
-                  {settings.appAccessCode}
-                </h2>
-
-                <p className="software-subtitle">
+                <strong>{settings.appAccessCode}</strong>
+                <p>
                   Status:{" "}
-                  <strong>
+                  <b>
                     {settings.appAccessCodeActive ? "Active" : "Inactive"}
-                  </strong>
+                  </b>
                 </p>
 
                 <button
                   onClick={toggleAccessCodeStatus}
                   disabled={saving}
-                  className="soft-button soft-button-secondary"
-                  style={{ marginTop: 12 }}
+                  className="settings-secondary-btn"
                 >
-                  <ShieldCheck size={17} />
+                  <ShieldCheck size={16} />
                   {settings.appAccessCodeActive
                     ? "Deactivate Code"
                     : "Activate Code"}
                 </button>
               </>
             ) : (
-              <p className="software-subtitle">
-                No code generated yet. Click Generate Code.
-              </p>
+              <p>No code generated yet. Click Generate Code.</p>
             )}
           </div>
         </div>
       </section>
 
-      <section className="settings-grid">
-        <div className="software-card settings-card">
-          <div className="settings-card-header">
-            <h2 className="settings-card-title">
+      <section className="settings-two-grid">
+        <div className="settings-pro-card">
+          <div className="settings-card-top">
+            <h2>
               <Building2 size={20} /> Company Identity
             </h2>
           </div>
 
           <div className="settings-form-group">
-            <label className="settings-label">Company Name</label>
+            <label>Company Name</label>
             <input
-              className="soft-input"
+              className="settings-input"
               value={settings.companyName}
               onChange={(e) => updateField("companyName", e.target.value)}
             />
           </div>
 
           <div className="settings-form-group">
-            <label className="settings-label">Default Project Name</label>
+            <label>Default Project Name</label>
             <input
-              className="soft-input"
+              className="settings-input"
               value={settings.projectName}
               onChange={(e) => updateField("projectName", e.target.value)}
             />
           </div>
 
-          <div className="settings-form-group">
-            <label className="settings-label">Logo URL</label>
-            <input
-              className="soft-input"
-              value={settings.logoUrl}
-              onChange={(e) => updateField("logoUrl", e.target.value)}
-              placeholder="https://example.com/logo.png"
-            />
+          <div className="settings-note">
+            Logo upload has been removed. The app will use the configured
+            company name and project name only.
           </div>
-
-          {settings.logoUrl && (
-            <div className="settings-logo-preview">
-              <img src={settings.logoUrl} alt="Company logo" />
-            </div>
-          )}
         </div>
 
-        <div className="software-card settings-card">
-          <div className="settings-card-header">
-            <h2 className="settings-card-title">
+        <div className="settings-pro-card">
+          <div className="settings-card-top">
+            <h2>
               <Clock size={20} /> Shift Settings
             </h2>
           </div>
 
           <div className="settings-form-group">
-            <label className="settings-label">Shift Start</label>
+            <label>Shift Start</label>
             <input
               type="time"
-              className="soft-input"
+              className="settings-input"
               value={settings.shiftStart}
               onChange={(e) => updateField("shiftStart", e.target.value)}
             />
           </div>
 
           <div className="settings-form-group">
-            <label className="settings-label">Shift End</label>
+            <label>Shift End</label>
             <input
               type="time"
-              className="soft-input"
+              className="settings-input"
               value={settings.shiftEnd}
               onChange={(e) => updateField("shiftEnd", e.target.value)}
             />
           </div>
 
-          <p className="software-subtitle">
-            These times can control diary periods, reports, and daily summaries.
-          </p>
+          <div className="settings-note">
+            These times can support diary periods, daily summaries, and report
+            windows.
+          </div>
         </div>
       </section>
 
-      <section className="software-card settings-card">
-        <div className="settings-card-header">
+      <section className="settings-pro-card">
+        <div className="settings-card-top">
           <div>
-            <h2 className="settings-card-title">
+            <h2>
               <MapPin size={20} /> Areas and Sub-Areas
             </h2>
-            <p className="software-subtitle">
-              Each area can now have its own sub-areas. The app will only show
-              sub-areas connected to the selected area.
+            <p>
+              Configure the exact site areas and sub-areas supervisors can
+              select inside the mobile app.
             </p>
           </div>
         </div>
 
-        <div className="settings-inline-add">
+        <div className="settings-add-row">
           <input
-            className="soft-input"
+            className="settings-input"
             value={newArea}
             onChange={(e) => setNewArea(e.target.value)}
             placeholder="Add main area, e.g. Plant"
           />
-          <button onClick={addArea} className="soft-button soft-button-primary">
-            <Plus size={17} /> Add Area
+          <button onClick={addArea} className="settings-primary-btn">
+            <Plus size={16} /> Add Area
           </button>
         </div>
 
-        <div className="settings-wbs-grid">
+        <div className="settings-card-grid">
           {settings.areas.map((area, areaIndex) => (
-            <div key={areaIndex} className="settings-wbs-card">
-              <div className="settings-inline-add">
+            <div key={areaIndex} className="settings-mini-card">
+              <div className="settings-row-control">
                 <input
-                  className="soft-input"
+                  className="settings-input"
                   value={area.name}
                   onChange={(e) => updateAreaName(areaIndex, e.target.value)}
                   placeholder="Area name"
@@ -834,27 +804,24 @@ export default function CompanySettingsPage() {
 
                 <button
                   onClick={() => removeArea(areaIndex)}
-                  className="settings-danger-button"
+                  className="settings-danger-btn"
                 >
                   <Trash2 size={15} />
                 </button>
               </div>
 
-              <p className="software-subtitle" style={{ marginTop: 8 }}>
-                Sub-areas for this area:
-              </p>
+              <p className="settings-small-title">Sub-areas</p>
 
-              <div className="settings-list">
+              <div className="settings-chip-list">
                 {(area.subAreas || []).map((subArea, subIndex) => (
-                  <div key={subIndex} className="settings-list-item">
+                  <div key={subIndex} className="settings-chip-item">
                     <span>{subArea}</span>
                     <button
                       onClick={() =>
                         removeSubAreaFromArea(areaIndex, subIndex)
                       }
-                      className="settings-danger-button"
                     >
-                      <Trash2 size={15} />
+                      <Trash2 size={13} />
                     </button>
                   </div>
                 ))}
@@ -862,58 +829,57 @@ export default function CompanySettingsPage() {
 
               <button
                 onClick={() => addSubAreaToArea(areaIndex)}
-                className="settings-mini-button"
-                style={{ marginTop: 12 }}
+                className="settings-mini-btn"
               >
-                <Plus size={15} /> Add Sub-Area
+                <Plus size={14} /> Add Sub-Area
               </button>
             </div>
           ))}
         </div>
       </section>
 
-      <section className="software-card settings-card">
-        <div className="settings-card-header">
+      <section className="settings-pro-card">
+        <div className="settings-card-top">
           <div>
-            <h2 className="settings-card-title">
+            <h2>
               <Layers size={20} /> WBS and Sub-WBS
             </h2>
-            <p className="software-subtitle">
-              These become dropdown options inside the mobile app.
-            </p>
+            <p>Configure work breakdown dropdowns for the mobile app.</p>
           </div>
 
-          <button onClick={addWbs} className="soft-button soft-button-primary">
-            <Plus size={17} /> Add WBS
+          <button onClick={addWbs} className="settings-primary-btn">
+            <Plus size={16} /> Add WBS
           </button>
         </div>
 
-        <div className="settings-wbs-grid">
+        <div className="settings-card-grid">
           {settings.wbs.map((item, wbsIndex) => (
-            <div key={wbsIndex} className="settings-wbs-card">
-              <div className="settings-inline-add">
+            <div key={wbsIndex} className="settings-mini-card">
+              <div className="settings-row-control">
                 <input
-                  className="soft-input"
+                  className="settings-input"
                   value={item.name}
                   onChange={(e) => updateWbsName(wbsIndex, e.target.value)}
                 />
+
                 <button
                   onClick={() => removeWbs(wbsIndex)}
-                  className="settings-danger-button"
+                  className="settings-danger-btn"
                 >
                   <Trash2 size={15} />
                 </button>
               </div>
 
-              <div className="settings-list">
+              <p className="settings-small-title">Sub-WBS options</p>
+
+              <div className="settings-chip-list">
                 {item.subOptions.map((sub, subIndex) => (
-                  <div key={subIndex} className="settings-list-item">
+                  <div key={subIndex} className="settings-chip-item">
                     <span>{sub}</span>
                     <button
                       onClick={() => removeSubWbs(wbsIndex, subIndex)}
-                      className="settings-danger-button"
                     >
-                      <Trash2 size={15} />
+                      <Trash2 size={13} />
                     </button>
                   </div>
                 ))}
@@ -921,40 +887,34 @@ export default function CompanySettingsPage() {
 
               <button
                 onClick={() => addSubWbs(wbsIndex)}
-                className="settings-mini-button"
-                style={{ marginTop: 12 }}
+                className="settings-mini-btn"
               >
-                <Plus size={15} /> Add Sub-WBS
+                <Plus size={14} /> Add Sub-WBS
               </button>
             </div>
           ))}
         </div>
       </section>
 
-      <section className="software-card settings-card">
-        <div className="settings-card-header">
+      <section className="settings-pro-card">
+        <div className="settings-card-top">
           <div>
-            <h2 className="settings-card-title">
+            <h2>
               <Boxes size={20} /> Materials
             </h2>
-            <p className="software-subtitle">
-              These materials can be used by the app and dashboard reports.
-            </p>
+            <p>Control the default material list used by the app and reports.</p>
           </div>
 
-          <button
-            onClick={addMaterial}
-            className="soft-button soft-button-primary"
-          >
-            <Plus size={17} /> Add Material
+          <button onClick={addMaterial} className="settings-primary-btn">
+            <Plus size={16} /> Add Material
           </button>
         </div>
 
-        <div className="settings-list">
+        <div className="settings-material-list">
           {settings.materials.map((material, index) => (
-            <div key={index} className="settings-table-row">
+            <div key={index} className="settings-material-row">
               <input
-                className="soft-input"
+                className="settings-input"
                 value={material.name}
                 onChange={(e) =>
                   updateMaterial(index, "name", e.target.value)
@@ -963,7 +923,7 @@ export default function CompanySettingsPage() {
               />
 
               <input
-                className="soft-input"
+                className="settings-input"
                 value={material.unit}
                 onChange={(e) =>
                   updateMaterial(index, "unit", e.target.value)
@@ -973,7 +933,7 @@ export default function CompanySettingsPage() {
 
               <input
                 type="number"
-                className="soft-input"
+                className="settings-input"
                 value={material.lowStockAlert}
                 onChange={(e) =>
                   updateMaterial(
@@ -987,7 +947,7 @@ export default function CompanySettingsPage() {
 
               <button
                 onClick={() => removeMaterial(index)}
-                className="settings-danger-button"
+                className="settings-danger-btn"
               >
                 <Trash2 size={15} />
               </button>
@@ -996,33 +956,30 @@ export default function CompanySettingsPage() {
         </div>
       </section>
 
-      <section className="software-card settings-card">
-        <div className="settings-card-header">
+      <section className="settings-pro-card">
+        <div className="settings-card-top">
           <div>
-            <h2 className="settings-card-title">
+            <h2>
               <ListChecks size={20} /> Custom Fields
             </h2>
-            <p className="software-subtitle">
-              Create extra fields that will appear in the mobile app and later
-              print on the PDF.
+            <p>
+              Add extra app fields such as weather, permit number, inspections,
+              or any client-specific requirement.
             </p>
           </div>
 
-          <button
-            onClick={addCustomField}
-            className="soft-button soft-button-primary"
-          >
-            <Plus size={17} /> Add Field
+          <button onClick={addCustomField} className="settings-primary-btn">
+            <Plus size={16} /> Add Field
           </button>
         </div>
 
-        <div className="settings-wbs-grid">
+        <div className="settings-card-grid">
           {settings.customFields.map((field, fieldIndex) => (
-            <div key={field.id || fieldIndex} className="settings-wbs-card">
+            <div key={field.id || fieldIndex} className="settings-mini-card">
               <div className="settings-form-group">
-                <label className="settings-label">Field Name</label>
+                <label>Field Name</label>
                 <input
-                  className="soft-input"
+                  className="settings-input"
                   value={field.label}
                   onChange={(e) =>
                     updateCustomField(fieldIndex, "label", e.target.value)
@@ -1032,9 +989,9 @@ export default function CompanySettingsPage() {
               </div>
 
               <div className="settings-form-group">
-                <label className="settings-label">Field Type</label>
+                <label>Field Type</label>
                 <select
-                  className="soft-input"
+                  className="settings-input"
                   value={field.type}
                   onChange={(e) =>
                     updateCustomField(
@@ -1052,15 +1009,7 @@ export default function CompanySettingsPage() {
                 </select>
               </div>
 
-              <label
-                className="settings-label"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  marginTop: 10,
-                }}
-              >
+              <label className="settings-checkbox">
                 <input
                   type="checkbox"
                   checked={field.required}
@@ -1077,21 +1026,18 @@ export default function CompanySettingsPage() {
 
               {field.type === "dropdown" && (
                 <>
-                  <p className="software-subtitle" style={{ marginTop: 12 }}>
-                    Dropdown options:
-                  </p>
+                  <p className="settings-small-title">Dropdown options</p>
 
-                  <div className="settings-list">
+                  <div className="settings-chip-list">
                     {(field.options || []).map((option, optionIndex) => (
-                      <div key={optionIndex} className="settings-list-item">
+                      <div key={optionIndex} className="settings-chip-item">
                         <span>{option}</span>
                         <button
                           onClick={() =>
                             removeCustomFieldOption(fieldIndex, optionIndex)
                           }
-                          className="settings-danger-button"
                         >
-                          <Trash2 size={15} />
+                          <Trash2 size={13} />
                         </button>
                       </div>
                     ))}
@@ -1099,18 +1045,16 @@ export default function CompanySettingsPage() {
 
                   <button
                     onClick={() => addCustomFieldOption(fieldIndex)}
-                    className="settings-mini-button"
-                    style={{ marginTop: 12 }}
+                    className="settings-mini-btn"
                   >
-                    <Plus size={15} /> Add Option
+                    <Plus size={14} /> Add Option
                   </button>
                 </>
               )}
 
               <button
                 onClick={() => removeCustomField(fieldIndex)}
-                className="settings-danger-button"
-                style={{ marginTop: 14 }}
+                className="settings-remove-field-btn"
               >
                 <Trash2 size={15} /> Remove Field
               </button>
@@ -1118,6 +1062,439 @@ export default function CompanySettingsPage() {
           ))}
         </div>
       </section>
+
+      <style jsx global>{`
+        .settings-pro-page {
+          display: flex;
+          flex-direction: column;
+          gap: 18px;
+        }
+
+        .settings-pro-loading,
+        .settings-pro-denied {
+          padding: 28px;
+          border-radius: 18px;
+          background: #ffffff;
+          border: 1px solid var(--border, #dfe4dc);
+          color: var(--text-strong, #0f1713);
+          box-shadow: var(--shadow-sm, 0 1px 4px rgba(18, 26, 22, 0.06));
+        }
+
+        .settings-pro-loading {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+
+        .settings-pro-denied h2 {
+          margin: 0;
+          font-size: 24px;
+          font-weight: 950;
+        }
+
+        .settings-pro-denied p {
+          margin: 8px 0 0;
+          color: var(--muted, #66726a);
+        }
+
+        .settings-pro-hero {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          gap: 20px;
+          padding: 22px;
+          border-radius: 20px;
+          background:
+            radial-gradient(circle at top right, rgba(199, 137, 42, 0.24), transparent 30%),
+            linear-gradient(135deg, #1f2a24 0%, #2d3a32 58%, #3a321f 100%);
+          color: #ffffff;
+          box-shadow: var(--shadow-md, 0 8px 24px rgba(18, 26, 22, 0.08));
+        }
+
+        .settings-pro-kicker {
+          margin: 0 0 6px;
+          color: #f3d59d;
+          font-size: 11px;
+          font-weight: 950;
+          letter-spacing: 0.16em;
+          text-transform: uppercase;
+        }
+
+        .settings-pro-hero h1 {
+          margin: 0;
+          font-size: 28px;
+          line-height: 1.05;
+          letter-spacing: -0.045em;
+          font-weight: 950;
+        }
+
+        .settings-pro-hero p {
+          margin: 9px 0 0;
+          max-width: 940px;
+          color: rgba(255, 255, 255, 0.78);
+          font-size: 13.5px;
+          line-height: 1.6;
+        }
+
+        .settings-save-main,
+        .settings-primary-btn,
+        .settings-secondary-btn,
+        .settings-mini-btn,
+        .settings-danger-btn,
+        .settings-remove-field-btn {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 7px;
+          border: 0;
+          cursor: pointer;
+          font-weight: 950;
+          transition: 0.18s ease;
+          white-space: nowrap;
+        }
+
+        .settings-save-main {
+          min-height: 40px;
+          padding: 0 15px;
+          border-radius: 12px;
+          background: #ffffff;
+          color: #1f2a24;
+        }
+
+        .settings-save-main:hover,
+        .settings-primary-btn:hover,
+        .settings-secondary-btn:hover,
+        .settings-mini-btn:hover,
+        .settings-danger-btn:hover,
+        .settings-remove-field-btn:hover {
+          transform: translateY(-1px);
+        }
+
+        .settings-save-main:disabled,
+        .settings-primary-btn:disabled,
+        .settings-secondary-btn:disabled {
+          opacity: 0.65;
+          cursor: not-allowed;
+        }
+
+        .settings-access-card,
+        .settings-pro-card {
+          padding: 18px;
+          border-radius: 18px;
+          border: 1px solid var(--border, #dfe4dc);
+          background: #ffffff;
+          box-shadow: var(--shadow-sm, 0 1px 4px rgba(18, 26, 22, 0.06));
+        }
+
+        .settings-card-top {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          gap: 14px;
+          margin-bottom: 16px;
+        }
+
+        .settings-card-top h2 {
+          display: flex;
+          align-items: center;
+          gap: 9px;
+          margin: 0;
+          color: var(--text-strong, #0f1713);
+          font-size: 18px;
+          font-weight: 950;
+          letter-spacing: -0.025em;
+        }
+
+        .settings-card-top p {
+          margin: 5px 0 0;
+          color: var(--muted, #66726a);
+          font-size: 12.5px;
+          line-height: 1.55;
+        }
+
+        .settings-primary-btn {
+          min-height: 36px;
+          padding: 0 13px;
+          border-radius: 10px;
+          background: #1f2a24;
+          color: #ffffff;
+        }
+
+        .settings-secondary-btn {
+          min-height: 34px;
+          padding: 0 12px;
+          border-radius: 10px;
+          background: #fff4df;
+          color: #80520f;
+          border: 1px solid #ead5aa;
+        }
+
+        .settings-access-grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 14px;
+        }
+
+        .settings-access-box {
+          padding: 18px;
+          border-radius: 16px;
+          border: 1px solid var(--border, #dfe4dc);
+          background: #fafbf8;
+        }
+
+        .settings-access-box span {
+          display: block;
+          color: var(--muted, #66726a);
+          font-size: 11px;
+          font-weight: 950;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+        }
+
+        .settings-access-box strong {
+          display: block;
+          margin-top: 8px;
+          color: var(--text-strong, #0f1713);
+          font-size: 25px;
+          font-weight: 950;
+          letter-spacing: -0.035em;
+        }
+
+        .settings-access-box.code strong {
+          font-size: 36px;
+          letter-spacing: 0.18em;
+        }
+
+        .settings-access-box p {
+          margin: 8px 0 0;
+          color: var(--muted, #66726a);
+          font-size: 12.5px;
+        }
+
+        .settings-two-grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 18px;
+        }
+
+        .settings-form-group {
+          margin-bottom: 14px;
+        }
+
+        .settings-form-group label {
+          display: block;
+          margin-bottom: 6px;
+          color: var(--muted, #66726a);
+          font-size: 11px;
+          font-weight: 950;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+        }
+
+        .settings-input {
+          width: 100%;
+          height: 40px;
+          border-radius: 10px;
+          border: 1px solid var(--border-strong, #cbd3c9);
+          background: #ffffff;
+          padding: 0 12px;
+          color: var(--text-strong, #0f1713);
+          font-size: 13px;
+          outline: none;
+        }
+
+        .settings-input:focus {
+          border-color: rgba(199, 137, 42, 0.8);
+          box-shadow: 0 0 0 3px rgba(199, 137, 42, 0.14);
+        }
+
+        .settings-note {
+          border-radius: 12px;
+          border: 1px solid #ead5aa;
+          background: #fff4df;
+          color: #80520f;
+          padding: 12px;
+          font-size: 12.5px;
+          font-weight: 850;
+          line-height: 1.5;
+        }
+
+        .settings-add-row,
+        .settings-row-control {
+          display: flex;
+          gap: 9px;
+          align-items: stretch;
+        }
+
+        .settings-add-row {
+          margin-bottom: 14px;
+        }
+
+        .settings-card-grid {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 14px;
+        }
+
+        .settings-mini-card {
+          padding: 14px;
+          border-radius: 16px;
+          border: 1px solid var(--border, #dfe4dc);
+          background: #fafbf8;
+          min-width: 0;
+        }
+
+        .settings-small-title {
+          margin: 12px 0 8px;
+          color: var(--muted, #66726a);
+          font-size: 11px;
+          font-weight: 950;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+        }
+
+        .settings-chip-list {
+          display: flex;
+          flex-direction: column;
+          gap: 7px;
+        }
+
+        .settings-chip-item {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+          min-height: 35px;
+          padding: 7px 9px;
+          border-radius: 10px;
+          border: 1px solid var(--border, #dfe4dc);
+          background: #ffffff;
+          color: var(--text-strong, #0f1713);
+          font-size: 12.5px;
+          font-weight: 850;
+        }
+
+        .settings-chip-item span {
+          min-width: 0;
+          overflow-wrap: anywhere;
+        }
+
+        .settings-chip-item button {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 26px;
+          height: 26px;
+          border-radius: 8px;
+          border: 1px solid #f4c7c3;
+          background: #fff1ef;
+          color: #b42318;
+          cursor: pointer;
+        }
+
+        .settings-mini-btn {
+          min-height: 32px;
+          margin-top: 10px;
+          padding: 0 10px;
+          border-radius: 9px;
+          background: #fff4df;
+          color: #80520f;
+          border: 1px solid #ead5aa;
+          font-size: 12px;
+        }
+
+        .settings-danger-btn {
+          width: 40px;
+          min-width: 40px;
+          height: 40px;
+          border-radius: 10px;
+          background: #fff1ef;
+          color: #b42318;
+          border: 1px solid #f4c7c3;
+        }
+
+        .settings-material-list {
+          display: flex;
+          flex-direction: column;
+          gap: 9px;
+        }
+
+        .settings-material-row {
+          display: grid;
+          grid-template-columns: minmax(180px, 1fr) 140px 140px 44px;
+          gap: 9px;
+          align-items: center;
+          padding: 10px;
+          border-radius: 14px;
+          border: 1px solid var(--border, #dfe4dc);
+          background: #fafbf8;
+        }
+
+        .settings-checkbox {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin: 10px 0 0;
+          color: var(--text-strong, #0f1713);
+          font-size: 12.5px;
+          font-weight: 850;
+        }
+
+        .settings-remove-field-btn {
+          min-height: 34px;
+          margin-top: 12px;
+          padding: 0 11px;
+          border-radius: 10px;
+          background: #fff1ef;
+          color: #b42318;
+          border: 1px solid #f4c7c3;
+          font-size: 12px;
+        }
+
+        @media (max-width: 1180px) {
+          .settings-card-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+
+          .settings-access-grid,
+          .settings-two-grid {
+            grid-template-columns: 1fr;
+          }
+        }
+
+        @media (max-width: 760px) {
+          .settings-pro-hero,
+          .settings-card-top {
+            flex-direction: column;
+            align-items: stretch;
+          }
+
+          .settings-card-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .settings-add-row,
+          .settings-row-control {
+            flex-direction: column;
+          }
+
+          .settings-material-row {
+            grid-template-columns: 1fr;
+          }
+
+          .settings-danger-btn {
+            width: 100%;
+          }
+
+          .settings-save-main,
+          .settings-primary-btn,
+          .settings-secondary-btn,
+          .settings-mini-btn,
+          .settings-remove-field-btn {
+            width: 100%;
+          }
+        }
+      `}</style>
     </div>
   );
 }
