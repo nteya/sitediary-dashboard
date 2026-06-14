@@ -2,8 +2,16 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { collection, getDocs, orderBy, query } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  orderBy,
+  query,
+} from "firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth, db } from "@/lib/firebase";
 import { DiaryRecord } from "@/lib/types";
 
 function normalize(value: unknown) {
@@ -43,25 +51,45 @@ export default function IssuesPage() {
   const [supervisor, setSupervisor] = useState("");
 
   useEffect(() => {
-    const load = async () => {
-      try {
-        const q = query(collection(db, "diaries"), orderBy("date", "desc"));
-        const snap = await getDocs(q);
+  const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    try {
+      setLoading(true);
 
-        const rows: DiaryRecord[] = snap.docs.map((doc) => ({
-          id: doc.id,
-          ...(doc.data() as Omit<DiaryRecord, "id">),
-        }));
-
-        setDiaries(rows);
-      } finally {
-        setLoading(false);
+      if (!user) {
+        setDiaries([]);
+        return;
       }
-    };
 
-    load();
-  }, []);
+      const userRef = doc(db, "companies", user.uid, "users", user.uid);
+      const userSnap = await getDoc(userRef);
 
+      const companyId = userSnap.exists()
+        ? userSnap.data()?.companyId || user.uid
+        : user.uid;
+
+      const q = query(
+        collection(db, "companies", companyId, "diaries"),
+        orderBy("date", "desc")
+      );
+
+      const snap = await getDocs(q);
+
+      const rows: DiaryRecord[] = snap.docs.map((docSnap) => ({
+        id: docSnap.id,
+        ...(docSnap.data() as Omit<DiaryRecord, "id">),
+      }));
+
+      setDiaries(rows);
+    } catch (error) {
+      console.error("Load company issues error:", error);
+      setDiaries([]);
+    } finally {
+      setLoading(false);
+    }
+  });
+
+  return () => unsubscribe();
+}, []);
   const issuesOnly = useMemo(() => {
     return diaries.filter((d) => (d.issues || "").trim());
   }, [diaries]);

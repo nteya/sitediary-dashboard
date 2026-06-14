@@ -9,7 +9,6 @@ import {
   Plus,
   Trash2,
   Loader2,
-  Settings,
   Building2,
   MapPin,
   Boxes,
@@ -19,6 +18,7 @@ import {
   RefreshCcw,
   ShieldCheck,
   ListChecks,
+  ClipboardList,
 } from "lucide-react";
 
 type WbsItem = {
@@ -53,6 +53,7 @@ type CompanySettings = {
   logoUrl: string;
   areas: AreaItem[];
   wbs: WbsItem[];
+  cwps: string[];
   materials: MaterialItem[];
   customFields: CustomField[];
   shiftStart: string;
@@ -90,6 +91,7 @@ const defaultSettings: CompanySettings = {
       subOptions: ["Erection", "Dismantling"],
     },
   ],
+  cwps: [],
   materials: [
     { name: "Cable", unit: "m", lowStockAlert: 50 },
     { name: "Unistrut", unit: "lengths", lowStockAlert: 10 },
@@ -124,6 +126,26 @@ function makeId(label: string) {
     .replace(/^_+|_+$/g, "");
 
   return `${base || "field"}_${Date.now()}`;
+}
+
+function normalizeCwps(raw: any): string[] {
+  if (!Array.isArray(raw)) return [];
+
+  const map = new Map<string, string>();
+
+  raw.forEach((item) => {
+    const value =
+      typeof item === "string"
+        ? item
+        : item?.number || item?.cwp || item?.cwpNumber || item?.name || "";
+
+    const clean = String(value || "").trim();
+    if (!clean) return;
+
+    map.set(clean.toLowerCase(), clean);
+  });
+
+  return Array.from(map.values()).sort((a, b) => a.localeCompare(b));
 }
 
 function normalizeSettings(data: any): CompanySettings {
@@ -170,6 +192,7 @@ function normalizeSettings(data: any): CompanySettings {
     logoUrl: "",
     areas: normalizedAreas.length ? normalizedAreas : defaultSettings.areas,
     wbs: Array.isArray(merged.wbs) ? merged.wbs : defaultSettings.wbs,
+    cwps: normalizeCwps(merged.cwps),
     materials: Array.isArray(merged.materials)
       ? merged.materials
       : defaultSettings.materials,
@@ -187,6 +210,7 @@ export default function CompanySettingsPage() {
   const [saving, setSaving] = useState(false);
 
   const [newArea, setNewArea] = useState("");
+  const [newCwp, setNewCwp] = useState("");
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (currentUser) => {
@@ -263,6 +287,16 @@ export default function CompanySettingsPage() {
         {
           ...cleanedSettings,
           logoUrl: "",
+          updatedAt: serverTimestamp(),
+          updatedBy: user.uid,
+        },
+        { merge: true }
+      );
+
+      await setDoc(
+        doc(db, "companies", companyId, "settings", "cwps"),
+        {
+          list: cleanedSettings.cwps,
           updatedAt: serverTimestamp(),
           updatedBy: user.uid,
         },
@@ -505,6 +539,53 @@ export default function CompanySettingsPage() {
     updateField("wbs", updated);
   };
 
+  const addCwp = () => {
+    const clean = newCwp.trim();
+
+    if (!clean) return;
+
+    const exists = settings.cwps.some(
+      (item) => item.trim().toLowerCase() === clean.toLowerCase()
+    );
+
+    if (exists) {
+      alert("This CWP already exists.");
+      setNewCwp("");
+      return;
+    }
+
+    updateField("cwps", normalizeCwps([...settings.cwps, clean]));
+    setNewCwp("");
+  };
+
+  const updateCwp = (index: number, value: string) => {
+    const updated = [...settings.cwps];
+    updated[index] = value;
+    updateField("cwps", updated);
+  };
+
+  const removeCwp = (index: number) => {
+    updateField(
+      "cwps",
+      settings.cwps.filter((_, i) => i !== index)
+    );
+  };
+
+  const bulkAddCwps = () => {
+    const value = prompt(
+      "Paste CWP numbers here. Use one CWP per line, or separate them with commas."
+    );
+
+    if (!value?.trim()) return;
+
+    const incoming = value
+      .split(/[\n,]+/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+    updateField("cwps", normalizeCwps([...settings.cwps, ...incoming]));
+  };
+
   const addMaterial = () => {
     updateField("materials", [
       ...settings.materials,
@@ -618,8 +699,8 @@ export default function CompanySettingsPage() {
           <h1>Company App Settings</h1>
           <p>
             Configure how the mobile app works for this company: company name,
-            project name, access code, work areas, WBS, materials, shifts, and
-            custom diary fields.
+            project name, access code, work areas, WBS, CWPs, materials, shifts,
+            and custom diary fields.
           </p>
         </div>
 
@@ -900,6 +981,69 @@ export default function CompanySettingsPage() {
         <div className="settings-card-top">
           <div>
             <h2>
+              <ClipboardList size={20} /> CWPs
+            </h2>
+            <p>
+              Manage CWP numbers used by supervisors when adding tasks in the
+              mobile app. These save to the dashboard and sync to the app.
+            </p>
+          </div>
+
+          <button onClick={bulkAddCwps} className="settings-secondary-btn">
+            <Plus size={16} /> Bulk Add
+          </button>
+        </div>
+
+        <div className="settings-add-row">
+          <input
+            className="settings-input"
+            value={newCwp}
+            onChange={(e) => setNewCwp(e.target.value)}
+            placeholder="Add CWP, e.g. CWP-001"
+          />
+
+          <button onClick={addCwp} className="settings-primary-btn">
+            <Plus size={16} /> Add CWP
+          </button>
+        </div>
+
+        <div className="settings-note">
+          Total CWPs configured: <b>{settings.cwps.length}</b>. Press Save
+          Changes after adding or editing CWPs so the mobile app can receive
+          the latest dropdown list.
+        </div>
+
+        <div className="settings-cwp-list">
+          {settings.cwps.length === 0 ? (
+            <div className="settings-empty-state">
+              No CWPs added yet. Add one CWP above or use Bulk Add.
+            </div>
+          ) : (
+            settings.cwps.map((cwp, index) => (
+              <div key={`${cwp}-${index}`} className="settings-cwp-row">
+                <input
+                  className="settings-input"
+                  value={cwp}
+                  onChange={(e) => updateCwp(index, e.target.value)}
+                  placeholder="CWP number"
+                />
+
+                <button
+                  onClick={() => removeCwp(index)}
+                  className="settings-danger-btn"
+                >
+                  <Trash2 size={15} />
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      </section>
+
+      <section className="settings-pro-card">
+        <div className="settings-card-top">
+          <div>
+            <h2>
               <Boxes size={20} /> Materials
             </h2>
             <p>Control the default material list used by the app and reports.</p>
@@ -954,9 +1098,7 @@ export default function CompanySettingsPage() {
             </div>
           ))}
         </div>
-      </section>
-
-      <section className="settings-pro-card">
+      </section>      <section className="settings-pro-card">
         <div className="settings-card-top">
           <div>
             <h2>
@@ -1317,6 +1459,7 @@ export default function CompanySettingsPage() {
           font-size: 12.5px;
           font-weight: 850;
           line-height: 1.5;
+          margin-bottom: 14px;
         }
 
         .settings-add-row,
@@ -1413,7 +1556,8 @@ export default function CompanySettingsPage() {
           border: 1px solid #f4c7c3;
         }
 
-        .settings-material-list {
+        .settings-material-list,
+        .settings-cwp-list {
           display: flex;
           flex-direction: column;
           gap: 9px;
@@ -1428,6 +1572,28 @@ export default function CompanySettingsPage() {
           border-radius: 14px;
           border: 1px solid var(--border, #dfe4dc);
           background: #fafbf8;
+        }
+
+        .settings-cwp-row {
+          display: grid;
+          grid-template-columns: minmax(180px, 1fr) 44px;
+          gap: 9px;
+          align-items: center;
+          padding: 10px;
+          border-radius: 14px;
+          border: 1px solid var(--border, #dfe4dc);
+          background: #fafbf8;
+        }
+
+        .settings-empty-state {
+          padding: 16px;
+          border-radius: 14px;
+          border: 1px dashed var(--border-strong, #cbd3c9);
+          background: #fafbf8;
+          color: var(--muted, #66726a);
+          font-size: 13px;
+          font-weight: 800;
+          text-align: center;
         }
 
         .settings-checkbox {
@@ -1478,7 +1644,8 @@ export default function CompanySettingsPage() {
             flex-direction: column;
           }
 
-          .settings-material-row {
+          .settings-material-row,
+          .settings-cwp-row {
             grid-template-columns: 1fr;
           }
 
