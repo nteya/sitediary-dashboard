@@ -45,6 +45,38 @@ function getPdfUrl(
   return diary.pdfUrl || diary.pdfLink || diary.downloadUrl || diary.fileUrl || "";
 }
 
+function getTaskText(task: unknown) {
+  if (typeof task === "string") {
+    return task.trim();
+  }
+
+  if (typeof task === "object" && task !== null) {
+    const t = task as {
+      description?: string;
+      task?: string;
+      cwp?: string;
+      cwpNumber?: string;
+      progress?: string;
+    };
+
+    return [
+      t.cwp || t.cwpNumber,
+      t.description || t.task,
+      t.progress,
+    ]
+      .filter(Boolean)
+      .join(" - ")
+      .trim();
+  }
+
+  return "";
+}
+
+function getTaskTexts(tasks: unknown) {
+  if (!Array.isArray(tasks)) return [];
+  return tasks.map(getTaskText).filter(Boolean);
+}
+
 export default function DiariesPage() {
   const [diaries, setDiaries] = useState<DiaryRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -74,10 +106,6 @@ export default function DiariesPage() {
       try {
         setLoading(true);
 
-        // IMPORTANT:
-        // This page must NEVER read from collection(db, "diaries").
-        // The mobile app submits to companies/{companyId}/diaries.
-        // For the current owner-only setup, companyId === user.uid.
         const q = query(
           collection(db, "companies", user.uid, "diaries"),
           orderBy("date", "desc")
@@ -159,7 +187,7 @@ export default function DiariesPage() {
         d.wbsMain,
         d.wbsSub,
         d.issues,
-        ...(d.tasks || []),
+        ...getTaskTexts(d.tasks),
       ]
         .filter(Boolean)
         .join(" ");
@@ -182,7 +210,7 @@ export default function DiariesPage() {
     ).size;
 
     const taskCount = filtered.reduce((total, diary) => {
-      return total + (diary.tasks?.filter(Boolean).length || 0);
+      return total + getTaskTexts(diary.tasks).length;
     }, 0);
 
     return {
@@ -440,7 +468,7 @@ export default function DiariesPage() {
 
               <tbody>
                 {filtered.map((d, index) => {
-                  const tasks = d.tasks?.filter(Boolean) || [];
+                  const tasks = getTaskTexts(d.tasks);
                   const taskCount = tasks.length;
                   const firstTask = tasks[0] || "";
                   const hasIssues = !!(d.issues || "").trim();
@@ -765,8 +793,7 @@ export default function DiariesPage() {
           gap: 14px;
           padding: 13px 15px;
           border-bottom: 1px solid #cbd3c9;
-          background:
-            linear-gradient(180deg, #f7f9f5, #edf1eb);
+          background: linear-gradient(180deg, #f7f9f5, #edf1eb);
         }
 
         .excel-dashboard-toolbar h2 {

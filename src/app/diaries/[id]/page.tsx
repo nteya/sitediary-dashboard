@@ -33,8 +33,6 @@ type ProgressPhotoItem = {
   index?: number;
   url?: string;
   path?: string;
-  width?: number;
-  height?: number;
 };
 
 type CustomFieldItem = {
@@ -61,19 +59,13 @@ type DiaryWithExtras = DiaryRecord & {
   supervisorName?: string;
   date?: string;
   issues?: string;
-  tasks?: string[];
+  tasks?: unknown[];
   materials?: unknown[];
   manpower?: unknown[];
   plantEquipment?: unknown[];
   customFields?: unknown[];
   progressPhotos?: unknown[];
-  createdAt?: unknown;
   submittedAtISO?: string;
-  totalManpowerHours?: number | string;
-  taskCount?: number;
-  materialCount?: number;
-  plantEquipmentCount?: number;
-  progressPhotoCount?: number;
 };
 
 function getPdfUrl(diary: DiaryWithExtras) {
@@ -83,6 +75,32 @@ function getPdfUrl(diary: DiaryWithExtras) {
 function cleanText(value: unknown) {
   const text = String(value ?? "").trim();
   return text || "-";
+}
+
+function getTaskText(task: unknown) {
+  if (typeof task === "string") return task.trim();
+
+  if (typeof task === "object" && task !== null) {
+    const t = task as {
+      description?: string;
+      task?: string;
+      cwp?: string;
+      cwpNumber?: string;
+      progress?: string;
+    };
+
+    return [t.cwp || t.cwpNumber, t.description || t.task, t.progress]
+      .filter(Boolean)
+      .join(" - ")
+      .trim();
+  }
+
+  return "";
+}
+
+function getTaskTexts(tasks: unknown) {
+  if (!Array.isArray(tasks)) return [];
+  return tasks.map(getTaskText).filter(Boolean);
 }
 
 function formatDateLabel(value?: string) {
@@ -187,8 +205,8 @@ function SectionHeader({
   );
 }
 
-function renderStringList(values?: string[]) {
-  const items = (values || []).map((x) => String(x || "").trim()).filter(Boolean);
+function renderStringList(values?: unknown[]) {
+  const items = getTaskTexts(values);
 
   if (items.length === 0) {
     return <EmptyBlock>No tasks were recorded for this diary.</EmptyBlock>;
@@ -422,9 +440,6 @@ export default function DiaryDetailPage() {
         setLoading(true);
         setNotFound(false);
 
-        // IMPORTANT SECURITY FIX:
-        // This page must only read the diary from the logged-in company workspace.
-        // Do not use doc(db, "diaries", id), because that can leak another company's diary.
         const diaryRef = doc(db, "companies", user.uid, "diaries", id);
         const snap = await getDoc(diaryRef);
 
@@ -460,7 +475,7 @@ export default function DiaryDetailPage() {
   }, [diary]);
 
   const taskCount = useMemo(() => {
-    return diary?.tasks?.filter(Boolean).length || 0;
+    return getTaskTexts(diary?.tasks).length;
   }, [diary]);
 
   const materialCount = useMemo(() => {
@@ -481,48 +496,6 @@ export default function DiaryDetailPage() {
           <h1>Loading diary...</h1>
           <p>Checking your company workspace and opening the diary securely.</p>
         </div>
-
-        <style jsx global>{`
-          .diary-detail-page {
-            min-height: 60vh;
-            display: grid;
-            place-items: center;
-          }
-
-          .detail-loading-card {
-            width: min(520px, 100%);
-            text-align: center;
-            padding: 34px;
-            border-radius: 26px;
-            border: 1px solid #dfe4dc;
-            background: #ffffff;
-            box-shadow: 0 20px 55px rgba(18, 26, 22, 0.1);
-          }
-
-          .detail-loader-dot {
-            width: 16px;
-            height: 16px;
-            margin: 0 auto 14px;
-            border-radius: 999px;
-            background: #c7892a;
-            box-shadow: 0 0 0 8px rgba(199, 137, 42, 0.14);
-          }
-
-          .detail-loading-card h1 {
-            margin: 0;
-            color: #0f1713;
-            font-size: 24px;
-            font-weight: 950;
-            letter-spacing: -0.04em;
-          }
-
-          .detail-loading-card p {
-            margin: 8px 0 0;
-            color: #66726a;
-            font-size: 13px;
-            line-height: 1.6;
-          }
-        `}</style>
       </div>
     );
   }
@@ -541,62 +514,6 @@ export default function DiaryDetailPage() {
             Back to Diaries
           </Link>
         </div>
-
-        <style jsx global>{`
-          .diary-detail-page {
-            min-height: 60vh;
-            display: grid;
-            place-items: center;
-          }
-
-          .detail-not-found-card {
-            width: min(650px, 100%);
-            padding: 34px;
-            border-radius: 28px;
-            border: 1px solid #f4c7c3;
-            background: linear-gradient(180deg, #ffffff, #fff8f7);
-            box-shadow: 0 20px 55px rgba(18, 26, 22, 0.1);
-          }
-
-          .detail-kicker {
-            margin: 0 0 8px;
-            color: #b42318;
-            font-size: 11px;
-            font-weight: 950;
-            text-transform: uppercase;
-            letter-spacing: 0.14em;
-          }
-
-          .detail-not-found-card h1 {
-            margin: 0;
-            color: #0f1713;
-            font-size: 30px;
-            line-height: 1.05;
-            font-weight: 950;
-            letter-spacing: -0.05em;
-          }
-
-          .detail-not-found-card p:not(.detail-kicker) {
-            margin: 12px 0 0;
-            color: #66726a;
-            font-size: 14px;
-            line-height: 1.75;
-          }
-
-          .detail-main-btn {
-            margin-top: 18px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 42px;
-            padding: 0 16px;
-            border-radius: 12px;
-            background: #1f2a24;
-            color: #ffffff;
-            font-size: 13px;
-            font-weight: 950;
-          }
-        `}</style>
       </div>
     );
   }
@@ -766,6 +683,47 @@ export default function DiaryDetailPage() {
           gap: 18px;
         }
 
+        .detail-loading-card,
+        .detail-not-found-card {
+          width: min(650px, 100%);
+          margin: 40px auto;
+          padding: 34px;
+          border-radius: 28px;
+          border: 1px solid #dfe4dc;
+          background: #ffffff;
+          box-shadow: 0 20px 55px rgba(18, 26, 22, 0.1);
+        }
+
+        .detail-loading-card {
+          text-align: center;
+        }
+
+        .detail-loader-dot {
+          width: 16px;
+          height: 16px;
+          margin: 0 auto 14px;
+          border-radius: 999px;
+          background: #c7892a;
+          box-shadow: 0 0 0 8px rgba(199, 137, 42, 0.14);
+        }
+
+        .detail-loading-card h1,
+        .detail-not-found-card h1 {
+          margin: 0;
+          color: #0f1713;
+          font-size: 28px;
+          font-weight: 950;
+          letter-spacing: -0.04em;
+        }
+
+        .detail-loading-card p,
+        .detail-not-found-card p:not(.detail-kicker) {
+          margin: 10px 0 0;
+          color: #66726a;
+          font-size: 14px;
+          line-height: 1.7;
+        }
+
         .detail-hero-pro {
           display: flex;
           justify-content: space-between;
@@ -806,6 +764,10 @@ export default function DiaryDetailPage() {
           font-weight: 950;
           letter-spacing: 0.16em;
           text-transform: uppercase;
+        }
+
+        .detail-not-found-card .detail-kicker {
+          color: #b42318;
         }
 
         .detail-hero-content h1 {
@@ -872,6 +834,10 @@ export default function DiaryDetailPage() {
           background: #c7892a;
           color: #ffffff;
           box-shadow: 0 10px 24px rgba(199, 137, 42, 0.22);
+        }
+
+        .detail-main-btn {
+          margin-top: 18px;
         }
 
         .detail-btn.secondary {
